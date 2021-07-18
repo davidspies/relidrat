@@ -139,9 +139,9 @@ fn go(
 
     let mut context = context.begin();
 
-    let mut holder = RuleHolder::new();
+    let mut holder = RuleHolder::new(rule_input);
     for rule in program {
-        holder.add(rule, &context, &rule_input);
+        holder.add(rule, &context);
     }
 
     for (instr, n) in proof.into_iter().zip(1..) {
@@ -180,9 +180,9 @@ fn go(
                 }
                 remove_level(Level::LevelOne, &revert, &select_input, &context);
 
-                holder.add(rule, &context, &rule_input);
+                holder.add(rule, &context);
             }
-            RuleInstruction::Del(rule) => holder.del(rule, &context, &rule_input),
+            RuleInstruction::Del(rule) => holder.del(rule, &context),
         }
     }
     (Outcome::NoConflictStep, context.get_tracker())
@@ -212,44 +212,37 @@ fn remove_level<'a, I>(
     );
 }
 
-struct RuleHolder {
+struct RuleHolder<'a> {
+    rule_input: Input<'a, (RuleIndex, Assig)>,
     rules_hm: HashMap<RuleIndex, HashSet<Assig>>,
     rules_by_val: HashMap<Vec<Assig>, RuleIndex>,
     containing_rules: HashMap<Assig, HashSet<RuleIndex>>,
     rule_counter: usize,
 }
 
-impl RuleHolder {
-    fn new() -> Self {
+impl<'a> RuleHolder<'a> {
+    fn new(rule_input: Input<'a, (RuleIndex, Assig)>) -> Self {
         RuleHolder {
+            rule_input,
             rules_hm: HashMap::new(),
             rules_by_val: HashMap::new(),
             containing_rules: HashMap::new(),
             rule_counter: 0,
         }
     }
-    fn add<'a, I>(
-        &mut self,
-        mut rule: Vec<Assig>,
-        context: &ExecutionContext<'a, I>,
-        rule_input: &Input<'a, (RuleIndex, Assig)>,
-    ) {
+    fn add<I>(&mut self, mut rule: Vec<Assig>, context: &ExecutionContext<'a, I>) {
         let i = RuleIndex::new(self.rule_counter);
         self.rule_counter += 1;
         self.rules_hm.insert(i, HashSet::from_iter(rule.clone()));
         for &x in &rule {
             self.containing_rules.entry(x).or_default().insert(i);
         }
-        rule_input.add_all(&context, rule.iter().map(|&x| (i, x)));
+        self.rule_input
+            .add_all(&context, rule.iter().map(|&x| (i, x)));
         rule.sort();
         self.rules_by_val.insert(rule, i);
     }
-    fn del<'a, I>(
-        &mut self,
-        mut rule: Vec<Assig>,
-        context: &ExecutionContext<'a, I>,
-        rule_input: &Input<'a, (RuleIndex, Assig)>,
-    ) {
+    fn del<I>(&mut self, mut rule: Vec<Assig>, context: &ExecutionContext<'a, I>) {
         rule.sort();
         match self.rules_by_val.entry(rule) {
             hash_map::Entry::Vacant(vac) => panic!(
@@ -262,7 +255,8 @@ impl RuleHolder {
                 for &x in &r {
                     self.containing_rules.get_mut(&x).unwrap().remove(&i);
                 }
-                rule_input.remove_all(&context, r.into_iter().map(|x| (i, x)));
+                self.rule_input
+                    .remove_all(&context, r.into_iter().map(|x| (i, x)));
             }
         }
     }
