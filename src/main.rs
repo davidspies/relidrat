@@ -32,7 +32,15 @@ pub enum Outcome {
 
 fn main() {
     env_logger::init();
-    let (outcome, tracker) = go();
+
+    let args = env::args().collect::<Vec<_>>();
+    let prog_file = File::open(&args[1]).expect("Could not read program file");
+    let program = parse::program(BufReader::new(prog_file));
+
+    let proof_file = File::open(&args[2]).expect("Could not read proof file");
+    let proof = parse::proof(BufReader::new(proof_file));
+
+    let (outcome, tracker) = go(program, proof);
     tracker
         .dump_dot(File::create("stats.dot").expect("Stats file not created"))
         .expect("Failed to write to stats file");
@@ -49,7 +57,10 @@ fn main() {
     }
 }
 
-fn go() -> (Outcome, ContextTracker) {
+fn go(
+    program: impl IntoIterator<Item = Vec<Assig>>,
+    proof: impl IntoIterator<Item = RuleInstruction>,
+) -> (Outcome, ContextTracker) {
     let mut context = CreationContext::new();
     let (rule_input, rule) = context.new_input::<(RuleIndex, Assig)>();
     let rule = rule.named("rule").save();
@@ -129,25 +140,11 @@ fn go() -> (Outcome, ContextTracker) {
     let mut context = context.begin();
 
     let mut holder = RuleHolder::new();
+    for rule in program {
+        holder.add(rule, &context, &rule_input);
+    }
 
-    let args = env::args().collect::<Vec<_>>();
-
-    let nrules = {
-        let prog_file = File::open(&args[1]).expect("Could not read program file");
-        let prog = parse::program(BufReader::new(prog_file));
-        let nrules = prog.len();
-        for rule in prog {
-            holder.add(rule, &context, &rule_input);
-        }
-        assert_eq!(holder.rule_counter, nrules);
-        nrules
-    };
-
-    let proof_file = File::open(&args[2]).expect("Could not read proof file");
-    for (instr, n) in parse::proof(BufReader::new(proof_file), nrules)
-        .into_iter()
-        .zip(1..)
-    {
+    for (instr, n) in proof.into_iter().zip(1..) {
         log::info!("Validing instruction {:?}", n);
         match instr {
             RuleInstruction::Add(rule) => {

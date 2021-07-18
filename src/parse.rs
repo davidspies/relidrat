@@ -7,7 +7,7 @@ use crate::{
 };
 use std::{fmt::Debug, io::BufRead};
 
-pub fn program<'a>(input: impl BufRead + 'a) -> impl ExactSizeIterator<Item = Vec<Assig>> + 'a {
+pub fn program<'a>(input: impl BufRead + 'a) -> impl IntoIterator<Item = Vec<Assig>> + 'a {
     let mut iter = input.lines();
     let mut next_line;
     loop {
@@ -29,14 +29,11 @@ pub fn program<'a>(input: impl BufRead + 'a) -> impl ExactSizeIterator<Item = Ve
     })
 }
 
-pub fn proof<'a>(
-    input: impl BufRead + 'a,
-    start_index: usize,
-) -> impl Iterator<Item = RuleInstruction> + 'a {
+pub fn proof<'a>(input: impl BufRead + 'a) -> impl Iterator<Item = RuleInstruction> + 'a {
     let scanner = Scanner::new("".to_string(), input.lines());
     ProofReader {
         scanner,
-        index: start_index,
+        index: 0,
         expected: None,
     }
 }
@@ -78,13 +75,6 @@ impl<Err: Debug, L: Iterator<Item = Result<String, Err>>> Iterator for ProofRead
         };
         Some(instr)
     }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self.expected {
-            Some(n) => (n - self.index, Some(n - self.index)),
-            None => (0, None),
-        }
-    }
 }
 
 struct RuleReader<L: Iterator>(ProofReader<L>);
@@ -98,9 +88,4 @@ impl<Err: Debug, L: Iterator<Item = Result<String, Err>>> Iterator for RuleReade
             RuleInstruction::Del(_) => panic!("Delete rule in program"),
         })
     }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
-    }
 }
-
-impl<Err: Debug, L: Iterator<Item = Result<String, Err>>> ExactSizeIterator for RuleReader<L> {}
