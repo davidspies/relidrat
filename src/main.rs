@@ -142,6 +142,9 @@ fn go(
 
     let mut holder = RuleHolder::new(rule_input);
     for rule in program {
+        if rule.is_empty() {
+            return Outcome::Validated;
+        }
         holder.add(rule, &context);
     }
 
