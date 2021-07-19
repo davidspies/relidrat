@@ -42,7 +42,7 @@ fn main() {
 
     let context = CreationContext::new();
     let tracker = context.get_tracker();
-    match go(context, program, proof) {
+    match validate_from(context, program, proof) {
         Outcome::UnvalidatedRule(i, rule) => {
             println!("Proof step {} not validated:", i);
             println!("{}", primitives::assignment_line(&rule));
@@ -58,7 +58,14 @@ fn main() {
         .expect("Failed to write to stats file");
 }
 
-fn go(
+pub fn validate(
+    program: impl IntoIterator<Item = Vec<Assig>>,
+    proof: impl IntoIterator<Item = RuleInstruction>,
+) -> Outcome {
+    validate_from(CreationContext::new(), program, proof)
+}
+
+pub fn validate_from(
     mut context: CreationContext,
     program: impl IntoIterator<Item = Vec<Assig>>,
     proof: impl IntoIterator<Item = RuleInstruction>,
