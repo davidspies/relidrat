@@ -2,7 +2,7 @@ mod parse;
 mod primitives;
 
 use crate::primitives::{Assig, RuleIndex};
-use standing_relations::{ContextTracker, CreationContext, ExecutionContext, Input, Op, Output};
+use standing_relations::{CreationContext, ExecutionContext, Input, Op, Output};
 use std::{
     collections::{hash_map, HashMap, HashSet},
     env,
@@ -40,11 +40,9 @@ fn main() {
     let proof_file = File::open(&args[2]).expect("Could not read proof file");
     let proof = parse::proof(BufReader::new(proof_file));
 
-    let (outcome, tracker) = go(program, proof);
-    tracker
-        .dump_dot(File::create("stats.dot").expect("Stats file not created"))
-        .expect("Failed to write to stats file");
-    match outcome {
+    let context = CreationContext::new();
+    let tracker = context.get_tracker();
+    match go(context, program, proof) {
         Outcome::UnvalidatedRule(i, rule) => {
             println!("Proof step {} not validated:", i);
             println!("{}", primitives::assignment_line(&rule));
@@ -55,13 +53,16 @@ fn main() {
         Outcome::UnvalidatedConflictStep => println!("Conflict not validated"),
         Outcome::Validated => println!("Proof validated"),
     }
+    tracker
+        .dump_dot(File::create("stats.dot").expect("Stats file not created"))
+        .expect("Failed to write to stats file");
 }
 
 fn go(
+    mut context: CreationContext,
     program: impl IntoIterator<Item = Vec<Assig>>,
     proof: impl IntoIterator<Item = RuleInstruction>,
-) -> (Outcome, ContextTracker) {
-    let mut context = CreationContext::new();
+) -> Outcome {
     let (rule_input, rule) = context.new_input::<(RuleIndex, Assig)>();
     let rule = rule.named("rule").save();
     let (select_input, selected) = context.new_input::<(Assig, Level)>();
@@ -149,14 +150,11 @@ fn go(
         match instr {
             RuleInstruction::Add(rule) => {
                 if rule.is_empty() {
-                    return (
-                        if context.commit().is_some() {
-                            Outcome::Validated
-                        } else {
-                            Outcome::UnvalidatedConflictStep
-                        },
-                        context.get_tracker(),
-                    );
+                    return if context.commit().is_some() {
+                        Outcome::Validated
+                    } else {
+                        Outcome::UnvalidatedConflictStep
+                    };
                 }
                 select_input.add_all(&context, rule.iter().map(|&x| (!x, Level::LevelOne)));
                 if context.commit().is_none() {
@@ -172,7 +170,7 @@ fn go(
                             }),
                         );
                         if context.commit().is_none() {
-                            return (Outcome::UnvalidatedRule(n, rule), context.get_tracker());
+                            return Outcome::UnvalidatedRule(n, rule);
                         }
                         remove_level(Level::LevelTwo, &revert, &select_input, &context);
                         debug_assert!(context.commit().is_none());
@@ -185,7 +183,7 @@ fn go(
             RuleInstruction::Del(rule) => holder.del(rule, &context),
         }
     }
-    (Outcome::NoConflictStep, context.get_tracker())
+    Outcome::NoConflictStep
 }
 
 fn remove_level<'a, I>(
