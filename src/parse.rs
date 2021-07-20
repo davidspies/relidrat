@@ -1,7 +1,7 @@
 mod scanner;
 
 use self::scanner::Scanner;
-use crate::{
+use relidrat::{
     primitives::{self, Assig},
     RuleInstruction,
 };
