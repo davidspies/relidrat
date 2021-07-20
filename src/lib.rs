@@ -19,6 +19,7 @@ pub enum RuleInstruction {
     Del(Vec<Assig>),
 }
 
+#[derive(PartialEq, Eq)]
 pub enum Outcome {
     UnvalidatedRule(usize, Vec<Assig>),
     NoConflictStep,
