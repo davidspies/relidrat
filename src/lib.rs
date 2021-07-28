@@ -49,7 +49,6 @@ pub fn validate_from(
         .get()
         .fsts()
         .intersection(selected.get().map(|(x, _)| !x))
-        .dynamic()
         .debug("lit_conflict")
         .named("lit_conflict")
         .dynamic()
