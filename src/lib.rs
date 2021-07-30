@@ -3,7 +3,11 @@ pub mod primitives;
 pub use crate::primitives::{Assig, RuleIndex};
 use standing_relations::{CreationContext, ExecutionContext, Input, Op, Output};
 use std::{
-    collections::{hash_map, HashMap, HashSet},
+    collections::{
+        hash_map::{self, DefaultHasher},
+        HashMap, HashSet,
+    },
+    hash::{Hash, Hasher},
     iter::FromIterator,
 };
 
@@ -54,23 +58,78 @@ pub fn validate_from(
         .get_output(&context);
     context.interrupt(lit_conflict, |_| ());
 
-    let sat_index = rule
+    let salt = 248972983;
+    let assig_numbers = rule
+        .get()
+        .reduce(move |&i, xs| {
+            let mut v = xs
+                .iter()
+                .map(|(&x, &count)| {
+                    assert_eq!(count, 1);
+                    let mut h = DefaultHasher::new();
+                    (salt, i, x).hash(&mut h);
+                    (h.finish(), x)
+                })
+                .collect::<Vec<_>>();
+            v.sort();
+            v
+        })
+        .flat_map(|(i, hxs)| {
+            hxs.into_iter()
+                .enumerate()
+                .map(move |(n, (_, x))| ((i, n), x))
+        })
+        .named("assig_numbers")
+        .dynamic();
+
+    let (twl_input, twl) = context.new_input::<((RuleIndex, usize), usize)>();
+    let twl = twl.named("twl");
+    context.feed(rule_index.get().map(|i| ((i, 0), 0)), twl_input.clone());
+    let indexed_partial_rules = twl
+        .filter(|&(_, count)| count < 2)
+        .join(assig_numbers)
+        .named("indexed_partial_rules")
+        .collect();
+    let nexts = indexed_partial_rules
+        .get()
+        .map(|(ind, count, x)| (x, (ind, count)))
+        .dynamic()
+        .left_join(selected.get().map(|(x, _)| (!x, ())))
+        .map(|(_, ((i, n), count), present)| {
+            let next_count = match present {
+                None => count + 1,
+                Some(()) => count,
+            };
+            ((i, n + 1), next_count)
+        })
+        .named("nexts")
+        .dynamic();
+    context.feed(nexts, twl_input);
+    let partial_rules = indexed_partial_rules
+        .get()
+        .map(|((i, _), _, x)| (i, x))
+        .named("partial_rules")
+        .collect();
+    let satisfied_inds = partial_rules
         .get()
         .swaps()
         .semijoin(selected.get().fsts())
-        .dynamic()
         .snds()
         .distinct()
-        .named("sat_index")
-        .collect();
-    let rem_index = rule_index
-        .get()
-        .minus(sat_index.get())
-        .named("rem_index")
+        .named("satisfied_inds")
         .dynamic();
-    let rem_rule = rule
+    let rem_inds = rule_index
         .get()
-        .antijoin(sat_index.get())
+        .set_minus(satisfied_inds)
+        .named("rem_inds")
+        .collect();
+    let unsatisfied = partial_rules
+        .get()
+        .semijoin(rem_inds.get())
+        .named("unsatisfied")
+        .collect();
+    let rem_rule = unsatisfied
+        .get()
         .swaps()
         .dynamic()
         .antijoin(selected.get().map(|(x, _)| !x))
@@ -78,42 +137,48 @@ pub fn validate_from(
         .swaps()
         .named("rem_rule")
         .collect();
-    let rule_conflict = rem_index
-        .minus(rem_rule.get().fsts().distinct())
+    let rule_conflict = rem_inds
+        .get()
+        .set_minus(rem_rule.get().fsts().distinct())
         .named("rule_conflict")
-        .dynamic()
-        .get_output(&context);
-    context.interrupt(rule_conflict, |_| ());
+        .dynamic();
+    context.interrupt(rule_conflict.get_output(&context), |_| ());
 
-    let update_level = rule_index
+    let rule_level = rem_inds
         .get()
         .map(|i| (i, Level::LevelZero))
         .dynamic()
         .concat(
-            rule.get()
+            unsatisfied
+                .get()
                 .swaps()
                 .join_values(selected.get().map(|(x, level)| (!x, level)).dynamic())
                 .dynamic(),
         )
         .dynamic()
         .group_max()
-        .named("update_level")
+        .named("rule_level")
         .dynamic();
-    let unit_rules = rem_rule
+    let unit_rule_inds = rem_rule
         .get()
         .fsts()
         .counts()
-        .dynamic()
-        .flat_map(|(i, count)| if count == 1 { Some(i) } else { None })
+        .filter(|&(_, count)| count <= 1)
+        .fsts()
+        .named("unit_rule_inds")
+        .dynamic();
+    let unit_rules = rem_rule
+        .get()
+        .semijoin(unit_rule_inds)
         .named("unit_rules")
         .dynamic();
-    let units = rem_rule.get().semijoin(unit_rules).named("units").dynamic();
-    let next_selection = units
-        .join_values(update_level)
+
+    let units = unit_rules
+        .join_values(rule_level)
         .group_min()
-        .named("next_selection")
+        .named("units")
         .dynamic();
-    context.feed_while(next_selection.get_output(&context), select_input.clone());
+    context.feed_while(units.get_output(&context), select_input.clone());
 
     let revert = selected.get().swaps().dynamic().get_kv_output(&context);
 

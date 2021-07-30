@@ -106,7 +106,7 @@ dependencies = [
 [[package]]
 name = "standing-relations"
 version = "0.1.0"
-source = "git+https://github.com/davidspies/standing-relations?branch=main#abdad6fca839759320fa849e8ce1831d302aae6c"
+source = "git+https://github.com/davidspies/standing-relations?branch=main#c613e939235fee00540e0c6830633cb76e8e0b38"
 dependencies = [
  "log",
 ]
