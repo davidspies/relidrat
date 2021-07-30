@@ -53,6 +53,7 @@ pub fn validate_from(
         .get()
         .fsts()
         .intersection(selected.get().map(|(x, _)| !x).dynamic())
+        .dynamic()
         .named("lit_conflict")
         .dynamic()
         .get_output(&context);
@@ -74,6 +75,7 @@ pub fn validate_from(
             v.sort();
             v
         })
+        .dynamic()
         .flat_map(|(i, hxs)| {
             hxs.into_iter()
                 .enumerate()
@@ -94,7 +96,8 @@ pub fn validate_from(
         .get()
         .map(|(ind, count, x)| (x, (ind, count)))
         .dynamic()
-        .left_join(selected.get().map(|(x, _)| (!x, ())))
+        .left_join(selected.get().map(|(x, _)| (!x, ())).dynamic())
+        .dynamic()
         .map(|(_, ((i, n), count), present)| {
             let next_count = match present {
                 None => count + 1,
@@ -114,6 +117,7 @@ pub fn validate_from(
         .get()
         .swaps()
         .semijoin(selected.get().fsts())
+        .dynamic()
         .snds()
         .distinct()
         .named("satisfied_inds")
@@ -132,14 +136,13 @@ pub fn validate_from(
         .get()
         .swaps()
         .dynamic()
-        .antijoin(selected.get().map(|(x, _)| !x))
-        .dynamic()
+        .antijoin(selected.get().map(|(x, _)| !x).dynamic())
         .swaps()
         .named("rem_rule")
         .collect();
     let rule_conflict = rem_inds
         .get()
-        .set_minus(rem_rule.get().fsts().distinct())
+        .set_minus(rem_rule.get().fsts().distinct().dynamic())
         .named("rule_conflict")
         .dynamic();
     context.interrupt(rule_conflict.get_output(&context), |_| ());
@@ -163,6 +166,7 @@ pub fn validate_from(
         .get()
         .fsts()
         .counts()
+        .dynamic()
         .filter(|&(_, count)| count <= 1)
         .fsts()
         .named("unit_rule_inds")
