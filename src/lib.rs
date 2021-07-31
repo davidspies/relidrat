@@ -45,8 +45,9 @@ pub fn validate_from(
 ) -> Outcome {
     let (rule_input, rule) = context.new_input::<(RuleIndex, Assig)>();
     let rule = rule.named("rule").save();
-    let (select_input, selected) = context.new_input::<(Assig, Level)>();
-    let selected = selected.named("selected").collect();
+    let (select_input, selected_inp) = context.new_input::<(Assig, Level)>();
+    let selected_inp = selected_inp.named("selected_inp").save();
+    let selected = selected_inp.get().group_min().collect();
 
     let rule_index = rule.get().fsts().distinct().named("rule_index").collect();
     let lit_conflict = selected
@@ -127,17 +128,14 @@ pub fn validate_from(
         .set_minus(satisfied_inds)
         .named("rem_inds")
         .collect();
-    let unsatisfied = partial_rules
-        .get()
-        .semijoin(rem_inds.get())
-        .named("unsatisfied")
-        .collect();
-    let rem_rule = unsatisfied
+    let rem_rule = partial_rules
         .get()
         .swaps()
         .dynamic()
         .antijoin(selected.get().map(|(x, _)| !x).dynamic())
         .swaps()
+        .dynamic()
+        .semijoin(rem_inds.get())
         .named("rem_rule")
         .collect();
     let rule_conflict = rem_inds
@@ -147,18 +145,17 @@ pub fn validate_from(
         .dynamic();
     context.interrupt(rule_conflict.get_output(&context), |_| ());
 
-    let rule_level = rem_inds
+    let rule_level = rule_index
         .get()
         .map(|i| (i, Level::LevelZero))
         .dynamic()
         .concat(
-            unsatisfied
+            partial_rules
                 .get()
                 .swaps()
                 .join_values(selected.get().map(|(x, level)| (!x, level)).dynamic())
                 .dynamic(),
         )
-        .dynamic()
         .group_max()
         .named("rule_level")
         .dynamic();
@@ -184,7 +181,7 @@ pub fn validate_from(
         .dynamic();
     context.feed_while(units.get_output(&context), select_input.clone());
 
-    let revert = selected.get().swaps().dynamic().get_kv_output(&context);
+    let revert = selected_inp.get().swaps().dynamic().get_kv_output(&context);
 
     let mut context = context.begin();
 
