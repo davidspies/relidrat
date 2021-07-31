@@ -48,7 +48,7 @@ pub fn validate_from(
     let lit_conflict = selected
         .get()
         .fsts()
-        .intersection(selected.get().map(|(x, _)| !x))
+        .intersection(selected.get().map(|(x, _)| !x).dynamic())
         .named("lit_conflict")
         .dynamic()
         .get_output(&context);
@@ -72,7 +72,9 @@ pub fn validate_from(
         .get()
         .antijoin(sat_index.get())
         .swaps()
+        .dynamic()
         .antijoin(selected.get().map(|(x, _)| !x))
+        .dynamic()
         .swaps()
         .named("rem_rule")
         .collect();
@@ -86,11 +88,14 @@ pub fn validate_from(
     let update_level = rule_index
         .get()
         .map(|i| (i, Level::LevelZero))
+        .dynamic()
         .concat(
             rule.get()
                 .swaps()
-                .join_values(selected.get().map(|(x, level)| (!x, level))),
+                .join_values(selected.get().map(|(x, level)| (!x, level)).dynamic())
+                .dynamic(),
         )
+        .dynamic()
         .group_max()
         .named("update_level")
         .dynamic();
@@ -98,6 +103,7 @@ pub fn validate_from(
         .get()
         .fsts()
         .counts()
+        .dynamic()
         .flat_map(|(i, count)| if count == 1 { Some(i) } else { None })
         .named("unit_rules")
         .dynamic();
