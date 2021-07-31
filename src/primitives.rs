@@ -47,6 +47,12 @@ impl RuleIndex {
     }
 }
 
+impl Display for RuleIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 pub fn assignment_line(r: &Vec<Assig>) -> String {
     let mut res = String::new();
     for &Assig(x) in r {

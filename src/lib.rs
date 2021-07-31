@@ -42,14 +42,13 @@ pub fn validate_from(
     let (rule_input, rule) = context.new_input::<(RuleIndex, Assig)>();
     let rule = rule.named("rule").save();
     let (select_input, selected) = context.new_input::<(Assig, Level)>();
-    let selected = selected.debug("selected").named("selected").collect();
+    let selected = selected.named("selected").collect();
 
     let rule_index = rule.get().fsts().distinct().named("rule_index").collect();
     let lit_conflict = selected
         .get()
         .fsts()
         .intersection(selected.get().map(|(x, _)| !x))
-        .debug("lit_conflict")
         .named("lit_conflict")
         .dynamic()
         .get_output(&context);
@@ -79,7 +78,6 @@ pub fn validate_from(
         .collect();
     let rule_conflict = rem_index
         .minus(rem_rule.get().fsts().distinct())
-        .debug("rule_conflict")
         .named("rule_conflict")
         .dynamic()
         .get_output(&context);
@@ -128,14 +126,17 @@ pub fn validate_from(
         match instr {
             RuleInstruction::Add(rule) => {
                 if rule.is_empty() {
+                    log::debug!("Checking empty rule");
                     return if context.commit().is_some() {
                         Outcome::Validated
                     } else {
                         Outcome::UnvalidatedConflictStep
                     };
                 }
+                log::debug!("Checking for AT");
                 select_input.add_all(&context, rule.iter().map(|&x| (!x, Level::LevelOne)));
                 if context.commit().is_none() {
+                    log::debug!("No AT found; Checking for RAT");
                     for &i in &holder.containing_rules[&!rule[0]] {
                         select_input.add_all(
                             &context,
@@ -153,6 +154,9 @@ pub fn validate_from(
                         remove_level(Level::LevelTwo, &revert, &select_input, &context);
                         debug_assert!(context.commit().is_none());
                     }
+                    log::debug!("RAT found");
+                } else {
+                    log::debug!("AT found");
                 }
                 remove_level(Level::LevelOne, &revert, &select_input, &context);
 
@@ -227,6 +231,7 @@ impl<'a> RuleHolder<'a> {
             ),
             hash_map::Entry::Occupied(occ) => {
                 let (r, i) = occ.remove_entry();
+                log::debug!("Deleting rule {}", i);
                 self.rules_hm.remove(&i);
                 for &x in &r {
                     self.containing_rules.get_mut(&x).unwrap().remove(&i);
