@@ -53,8 +53,7 @@ pub fn validate_from(
     let lit_conflict = selected
         .get()
         .fsts()
-        .intersection(selected.get().map(|(x, _)| !x).dynamic())
-        .dynamic()
+        .intersection(selected.get().map(|(x, _)| !x))
         .named("lit_conflict")
         .dynamic()
         .get_output(&context);
@@ -76,7 +75,6 @@ pub fn validate_from(
             v.sort();
             v
         })
-        .dynamic()
         .flat_map(|(i, hxs)| {
             hxs.into_iter()
                 .enumerate()
@@ -96,9 +94,7 @@ pub fn validate_from(
     let nexts = indexed_partial_rules
         .get()
         .map(|(ind, count, x)| (x, (ind, count)))
-        .dynamic()
-        .left_join(selected.get().map(|(x, _)| (!x, ())).dynamic())
-        .dynamic()
+        .left_join(selected.get().map(|(x, _)| (!x, ())))
         .map(|(_, ((i, n), count), present)| {
             let next_count = match present {
                 None => count + 1,
@@ -131,10 +127,9 @@ pub fn validate_from(
     let rem_rule = partial_rules
         .get()
         .swaps()
+        .antijoin(selected.get().map(|(x, _)| !x))
         .dynamic()
-        .antijoin(selected.get().map(|(x, _)| !x).dynamic())
         .swaps()
-        .dynamic()
         .semijoin(rem_inds.get())
         .named("rem_rule")
         .collect();
@@ -148,12 +143,11 @@ pub fn validate_from(
     let rule_level = rule_index
         .get()
         .map(|i| (i, Level::LevelZero))
-        .dynamic()
         .concat(
             partial_rules
                 .get()
                 .swaps()
-                .join_values(selected.get().map(|(x, level)| (!x, level)).dynamic())
+                .join_values(selected.get().map(|(x, level)| (!x, level)))
                 .dynamic(),
         )
         .group_max()
@@ -163,7 +157,6 @@ pub fn validate_from(
         .get()
         .fsts()
         .counts()
-        .dynamic()
         .filter(|&(_, count)| count <= 1)
         .fsts()
         .named("unit_rule_inds")
@@ -181,7 +174,7 @@ pub fn validate_from(
         .dynamic();
     context.feed_while(units.get_output(&context), select_input.clone());
 
-    let revert = selected_inp.get().swaps().dynamic().get_kv_output(&context);
+    let revert = selected_inp.get().swaps().get_kv_output(&context);
 
     let mut context = context.begin();
 
