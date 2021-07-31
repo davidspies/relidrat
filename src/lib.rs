@@ -106,11 +106,13 @@ pub fn validate_from(
     context.feed(nexts, twl_input);
     let partial_rules = indexed_partial_rules
         .get()
+        .consolidate()
         .map(|((i, _), _, x)| (i, x))
         .named("partial_rules")
         .collect();
     let satisfied_inds = partial_rules
         .get()
+        .consolidate()
         .swaps()
         .semijoin(selected.get().fsts())
         .dynamic()
@@ -125,6 +127,7 @@ pub fn validate_from(
         .collect();
     let rem_rule = partial_rules
         .get()
+        .consolidate()
         .swaps()
         .antijoin(selected.get().map(|(x, _)| !x))
         .dynamic()
@@ -145,8 +148,9 @@ pub fn validate_from(
         .concat(
             partial_rules
                 .get()
+                .consolidate()
                 .swaps()
-                .join_values(selected.get().map(|(x, level)| (!x, level)))
+                .join_values(selected.get().consolidate().map(|(x, level)| (!x, level)))
                 .dynamic(),
         )
         .group_max()
@@ -162,6 +166,7 @@ pub fn validate_from(
         .dynamic();
     let unit_rules = rem_rule
         .get()
+        .consolidate()
         .semijoin(unit_rule_inds)
         .named("unit_rules")
         .dynamic();
