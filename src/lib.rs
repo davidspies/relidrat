@@ -47,7 +47,7 @@ pub fn validate_from(
     let rule = rule.named("rule").save();
     let (select_input, selected_inp) = context.new_input::<(Assig, Level)>();
     let selected_inp = selected_inp.named("selected_inp").save();
-    let selected = selected_inp.get().group_min().collect();
+    let selected = selected_inp.get().group_min().named("selected").collect();
 
     let rule_index = rule.get().fsts().distinct().named("rule_index").collect();
     let lit_conflict = selected
@@ -55,9 +55,8 @@ pub fn validate_from(
         .fsts()
         .intersection(selected.get().map(|(x, _)| !x))
         .named("lit_conflict")
-        .dynamic()
-        .get_output(&context);
-    context.interrupt(lit_conflict, |_| ());
+        .dynamic();
+    context.interrupt(lit_conflict.get_output(&context), |_| ());
 
     let salt = 248972983;
     let assig_numbers = rule
